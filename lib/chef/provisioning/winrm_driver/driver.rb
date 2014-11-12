@@ -39,10 +39,10 @@ class Chef
 					elsif !winrm_options[:fqdn].nil?
 						@remote = valid_target?(winrm_options[:fqdn])
 					else
-						Chef::Log.fatal("No valid method of reaching this host!")
+						Chef::Log.fatal("=> No valid method of reaching this host!")
 					end
 					
-					Chef::Log.debug("Using #{@remote}")
+					Chef::Log.debug("=> Using #{@remote}")
 
 					@endpoint = winrm_endpoint(@remote)
 
@@ -73,18 +73,21 @@ class Chef
 					}
 					type = :plaintext
 					transport = Chef::Provisioning::Transport::WinRM.new(@endpoint, type, options, config)
-					convergence_strategy = Chef::Provisioning::ConvergenceStrategy::InstallMsi.new(machine_options[:convergence_options], config)
+					convergence_strategy = convergence_for(machine_options[:convergence_options], config)
 					Chef::Provisioning::Machine::WindowsMachine.new(machine_spec, transport, convergence_strategy)
 				end
 
 				def destroy_machine(action_handler, machine_spec, machine_options)
-					action_handler.perform_action "Removing machine #{machine_spec.name}" do
+					action_handler.perform_action "=> Removing machine #{machine_spec.name}" do
 						machine_spec.location = nil
 					end
+					strategy = convergence_for(machine_options[:convergence_options],config)
+					strategy.cleanup_convergence(action_handler, machine_spec)
+					Chef::Log.debug("=> #{machine_spec.name} removed from the Chef server")
 				end
 
 				def stop_machine(action_handler, machine_spec, machine_options)
-					Chef::Log.warn("Machine action :stop is unsupported")
+					Chef::Log.warn("=>! Machine action :stop is unsupported")
 				end
 
 				def connect_to_machine(machine_spec, machine_options)
@@ -104,7 +107,7 @@ class Chef
 				end
 
 				def valid_ip?(address)
-					!!Resolv::AddressRegex.match(address) || Chef::Log.fatal("You've given me an invalid IP address! #{address}")
+					!!Resolv::AddressRegex.match(address) || Chef::Log.fatal("=>! You've given me an invalid IP address! #{address}")
 					address
 				end
 
@@ -112,14 +115,18 @@ class Chef
 					begin
 						Resolv.getaddress(fqdn)
 					rescue
-						Chef::Log.fatal("Unable to resolve target! #{fqdn}")
+						Chef::Log.fatal("=>! Unable to resolve target! #{fqdn}")
 					end
 				end
 
 				def winrm_endpoint(fqdn, port=5985)
 					endpoint = "http://#{fqdn}:#{port}/wsman"
-					Chef::Log.debug("Using #{endpoint} endpoint")
+					Chef::Log.debug("=> Using #{endpoint} endpoint")
 					endpoint
+				end
+
+				def convergence_for(convergence_options, config)
+					Chef::Provisioning::ConvergenceStrategy::InstallMsi.new(convergence_options, config)
 				end
 
 			end
